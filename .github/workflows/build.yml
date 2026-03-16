@@ -1,0 +1,107 @@
+name: Build MinimalEditor
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    tags:
+      - "v*"
+  pull_request:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: macos-latest
+    env:
+      APP_NAME: MinimalEditor.app
+      APP_PATH: build-universal/output/MinimalEditor.app
+      ZIP_PATH: MinimalEditor-macOS.zip
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Generate Xcode project
+        run: xcodegen generate
+
+      - name: Import signing certificate
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          BUILD_CERTIFICATE_BASE64: ${{ secrets.BUILD_CERTIFICATE_BASE64 }}
+          P12_PASSWORD: ${{ secrets.P12_PASSWORD }}
+          KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
+        run: |
+          CERT_PATH="$RUNNER_TEMP/build_certificate.p12"
+          KEYCHAIN_PATH="$RUNNER_TEMP/minimaleditor-build.keychain-db"
+
+          printf %s "$BUILD_CERTIFICATE_BASE64" | base64 -D > "$CERT_PATH"
+
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security import "$CERT_PATH" -P "$P12_PASSWORD" -A -t cert -f pkcs12 -k "$KEYCHAIN_PATH"
+          security list-keychains -d user -s "$KEYCHAIN_PATH" login.keychain-db
+          security set-key-partition-list -S apple-tool:,apple: -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+
+      - name: Build app
+        env:
+          SIGNING_IDENTITY: ${{ startsWith(github.ref, 'refs/tags/v') && 'Developer ID Application' || '' }}
+        run: ./scripts/build_universal.sh
+
+      - name: Verify signature
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: codesign -dv --verbose=4 "${APP_PATH}"
+
+      - name: Store notarization credentials
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          KEYCHAIN_PATH: ${{ runner.temp }}/minimaleditor-build.keychain-db
+        run: |
+          xcrun notarytool store-credentials "MinimalEditorNotary" \
+            --apple-id "$APPLE_ID" \
+            --password "$APPLE_APP_SPECIFIC_PASSWORD" \
+            --team-id "$APPLE_TEAM_ID" \
+            --keychain "$KEYCHAIN_PATH"
+
+      - name: Notarize app
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          KEYCHAIN_PATH: ${{ runner.temp }}/minimaleditor-build.keychain-db
+        run: |
+          ditto -c -k --sequesterRsrc --keepParent "${APP_PATH}" "${ZIP_PATH}"
+          xcrun notarytool submit "${ZIP_PATH}" \
+            --keychain-profile "MinimalEditorNotary" \
+            --keychain "$KEYCHAIN_PATH" \
+            --wait
+          xcrun stapler staple "${APP_PATH}"
+          xcrun stapler validate "${APP_PATH}"
+          spctl -a -vv "${APP_PATH}"
+
+      - name: Package app
+        if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
+        run: ditto -c -k --sequesterRsrc --keepParent "${APP_PATH}" "${ZIP_PATH}"
+
+      - name: Package notarized app
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: ditto -c -k --sequesterRsrc --keepParent "${APP_PATH}" "${ZIP_PATH}"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: MinimalEditor-macOS
+          path: ${{ env.ZIP_PATH }}
+
+      - name: Publish release asset
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: ${{ env.ZIP_PATH }}

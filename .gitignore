@@ -1,0 +1,13 @@
+.DS_Store
+build/
+build-tests/
+build-signed/
+build-universal/
+DerivedData/
+*.profraw
+*.xcuserstate
+*.xcworkspace/xcuserdata/
+*.xcodeproj/xcuserdata/
+*.xcscmblueprint
+
+Noctxt.xcodeproj/

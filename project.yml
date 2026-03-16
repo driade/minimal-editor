@@ -1,0 +1,44 @@
+name: MinimalEditor
+options:
+  createIntermediateGroups: true
+settings:
+  base:
+    PRODUCT_NAME: MinimalEditor
+    SWIFT_VERSION: 6.0
+    MACOSX_DEPLOYMENT_TARGET: 14.0
+    CURRENT_PROJECT_VERSION: 1
+    MARKETING_VERSION: 0.1.0
+targets:
+  MinimalEditor:
+    type: application
+    platform: macOS
+    sources:
+      - path: MinimalEditor
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.driade.minimaleditor
+        GENERATE_INFOPLIST_FILE: YES
+        INFOPLIST_KEY_CFBundleDisplayName: MinimalEditor
+        INFOPLIST_KEY_LSApplicationCategoryType: public.app-category.productivity
+        INFOPLIST_KEY_NSHumanReadableCopyright: ""
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        ENABLE_HARDENED_RUNTIME: YES
+        SUPPORTS_MACCATALYST: NO
+        CODE_SIGNING_ALLOWED: NO
+    scheme:
+      testTargets:
+        - MinimalEditorTests
+  MinimalEditorTests:
+    type: bundle.unit-test
+    platform: macOS
+    sources:
+      - path: MinimalEditorTests
+    dependencies:
+      - target: MinimalEditor
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.driade.minimaleditor.tests
+        PRODUCT_NAME: MinimalEditorTests
+        PRODUCT_MODULE_NAME: MinimalEditorTests
+        GENERATE_INFOPLIST_FILE: YES
+        CODE_SIGNING_ALLOWED: NO
