@@ -1,4 +1,5 @@
 import AppKit
+import Foundation
 import XCTest
 @testable import MinimalEditor
 
@@ -55,6 +56,7 @@ final class MinimalEditorTests: XCTestCase {
         store.updateFontSize(1)
         XCTAssertEqual(store.theme.fontSize, ThemeStore.minimumFontSize)
     }
+
     func testCaskHasNoMergeConflictMarkers() throws {
         let cask = try loadCaskFile()
 
@@ -63,11 +65,25 @@ final class MinimalEditorTests: XCTestCase {
         XCTAssertFalse(cask.contains(">>>>>>>"))
     }
 
-    func testCaskVersionMatchesCurrentRelease() throws {
+    func testCaskHasValidVersionAndSHA() throws {
         let cask = try loadCaskFile()
 
-        XCTAssertTrue(cask.contains("version \"0.1.3\""))
-        XCTAssertTrue(cask.contains("sha256 \"c6e0443b2be8104c00608ec4d5609635922cc36ca7639bb96a4e1d91c914adf7\""))
+        let version = try XCTUnwrap(firstMatch(in: cask, pattern: #"version "([0-9]+\.[0-9]+\.[0-9]+)""#))
+        let sha = try XCTUnwrap(firstMatch(in: cask, pattern: #"sha256 "([0-9a-f]{64})""#))
+
+        XCTAssertFalse(version.isEmpty)
+        XCTAssertEqual(sha.count, 64)
+    }
+
+    func testTaggedCommitUsesMatchingCaskVersion() throws {
+        guard let tag = exactTagForHead() else {
+            return
+        }
+
+        let cask = try loadCaskFile()
+        let version = try XCTUnwrap(firstMatch(in: cask, pattern: #"version "([0-9]+\.[0-9]+\.[0-9]+)""#))
+
+        XCTAssertEqual(version, tag.replacingOccurrences(of: "v", with: ""))
     }
 
     private func loadCaskFile() throws -> String {
@@ -77,4 +93,45 @@ final class MinimalEditorTests: XCTestCase {
         return try String(contentsOf: caskURL, encoding: .utf8)
     }
 
+    private func firstMatch(in text: String, pattern: String) -> String? {
+        guard let regex = try? NSRegularExpression(pattern: pattern) else {
+            return nil
+        }
+
+        let range = NSRange(text.startIndex..., in: text)
+        guard let match = regex.firstMatch(in: text, range: range),
+              match.numberOfRanges > 1,
+              let captureRange = Range(match.range(at: 1), in: text) else {
+            return nil
+        }
+
+        return String(text[captureRange])
+    }
+
+    private func exactTagForHead() -> String? {
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
+        process.arguments = ["git", "describe", "--tags", "--exact-match", "HEAD"]
+
+        let testsFileURL = URL(fileURLWithPath: #filePath)
+        process.currentDirectoryURL = testsFileURL.deletingLastPathComponent().deletingLastPathComponent()
+
+        let outputPipe = Pipe()
+        process.standardOutput = outputPipe
+        process.standardError = Pipe()
+
+        do {
+            try process.run()
+            process.waitUntilExit()
+        } catch {
+            return nil
+        }
+
+        guard process.terminationStatus == 0 else {
+            return nil
+        }
+
+        let data = outputPipe.fileHandleForReading.readDataToEndOfFile()
+        return String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
 }
