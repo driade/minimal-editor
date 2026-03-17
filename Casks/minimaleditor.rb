@@ -1,6 +1,6 @@
 cask "minimaleditor" do
-  version "0.1.0"
-  sha256 "c664d663599c37c851dbeba1e81d4d066de693ba031f044bf32838a983a9f27d"
+  version "0.1.3"
+  sha256 "c6e0443b2be8104c00608ec4d5609635922cc36ca7639bb96a4e1d91c914adf7"
 
   url "https://github.com/driade/minimal-editor/releases/download/v#{version}/MinimalEditor-macOS.zip"
   name "MinimalEditor"
