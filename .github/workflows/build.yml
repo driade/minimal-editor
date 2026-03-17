@@ -30,6 +30,15 @@ jobs:
       - name: Generate Xcode project
         run: xcodegen generate
 
+      - name: Validate Homebrew cask
+        run: |
+          test -f Casks/minimaleditor.rb
+          ! rg -n '^(<<<<<<<|=======|>>>>>>>)' Casks/minimaleditor.rb
+          ruby -c Casks/minimaleditor.rb
+
+      - name: Run tests
+        run: xcodebuild -project MinimalEditor.xcodeproj -scheme MinimalEditor -destination 'platform=macOS,arch=arm64' test
+
       - name: Import signing certificate
         if: startsWith(github.ref, 'refs/tags/v')
         env:

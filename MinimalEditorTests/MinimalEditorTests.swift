@@ -32,14 +32,15 @@ final class MinimalEditorTests: XCTestCase {
         defaults.removePersistentDomain(forName: #function)
         defaults.set("#111111", forKey: "theme.backgroundHex")
         defaults.set("#EEEEEE", forKey: "theme.textHex")
-        defaults.set("Courier", forKey: "theme.fontFamily")
+        let expectedFontFamily = ThemeStore.availableFontFamilies.first ?? EditorTheme.default.fontFamily
+        defaults.set(expectedFontFamily, forKey: "theme.fontFamily")
         defaults.set(19.0, forKey: "theme.fontSize")
 
         let store = ThemeStore(defaults: defaults)
 
         XCTAssertEqual(store.theme.background.hex, "#111111")
         XCTAssertEqual(store.theme.text.hex, "#EEEEEE")
-        XCTAssertEqual(store.theme.fontFamily, "Courier")
+        XCTAssertEqual(store.theme.fontFamily, expectedFontFamily)
         XCTAssertEqual(store.theme.fontSize, 19.0)
     }
 
@@ -54,4 +55,26 @@ final class MinimalEditorTests: XCTestCase {
         store.updateFontSize(1)
         XCTAssertEqual(store.theme.fontSize, ThemeStore.minimumFontSize)
     }
+    func testCaskHasNoMergeConflictMarkers() throws {
+        let cask = try loadCaskFile()
+
+        XCTAssertFalse(cask.contains("<<<<<<<"))
+        XCTAssertFalse(cask.contains("======="))
+        XCTAssertFalse(cask.contains(">>>>>>>"))
+    }
+
+    func testCaskVersionMatchesCurrentRelease() throws {
+        let cask = try loadCaskFile()
+
+        XCTAssertTrue(cask.contains("version \"0.1.3\""))
+        XCTAssertTrue(cask.contains("sha256 \"c6e0443b2be8104c00608ec4d5609635922cc36ca7639bb96a4e1d91c914adf7\""))
+    }
+
+    private func loadCaskFile() throws -> String {
+        let testsFileURL = URL(fileURLWithPath: #filePath)
+        let repoRoot = testsFileURL.deletingLastPathComponent().deletingLastPathComponent()
+        let caskURL = repoRoot.appendingPathComponent("Casks/minimaleditor.rb")
+        return try String(contentsOf: caskURL, encoding: .utf8)
+    }
+
 }
